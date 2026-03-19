@@ -37,7 +37,7 @@ notify() {
     fi
 
     if [ -f "$NOTIFY_IDFILE" ]; then
-        args+=(--replace="$(cat "$NOTIFY_IDFILE")")
+        args+=(--replace-id="$(cat "$NOTIFY_IDFILE")")
     fi
 
     notify_id="$(dunstify "${args[@]}" "$message")" || return
