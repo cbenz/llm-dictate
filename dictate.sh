@@ -28,13 +28,9 @@ require_deps() {
 
 notify() {
     local message="$1"
-    local timeout="${2:-}"
-    local args=(--printid -t "$timeout")
+    local timeout="${2:-0}"
+    local args=(--printid --app-name="dictate" -t "$timeout")
     local notify_id
-
-    if [ -z "$timeout" ]; then
-        args=(--printid)
-    fi
 
     if [ -f "$NOTIFY_IDFILE" ]; then
         args+=(--replace-id="$(cat "$NOTIFY_IDFILE")")
