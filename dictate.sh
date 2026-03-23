@@ -23,6 +23,7 @@ require_deps() {
 
     if [ "${#missing[@]}" -gt 0 ]; then
         printf 'Missing dependencies: %s\n' "${missing[*]}" >&2
+        dunstify --app-name="dictate" -t 6000 "❌ Missing dependencies: ${missing[*]}" >/dev/null 2>&1 || true
         printf 'Install the missing commands and retry.\n' >&2
         exit 1
     fi
@@ -47,6 +48,19 @@ close_notification() {
         dunstify --close="$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
         rm -f "$NOTIFY_IDFILE"
     fi
+}
+
+format_error_message() {
+    local error_text="$1"
+    local single_line
+
+    single_line="$(printf '%s' "$error_text" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+    if [ -z "$single_line" ]; then
+        printf 'Unknown error'
+        return
+    fi
+
+    printf '%.180s' "$single_line"
 }
 
 is_running_pidfile() {
@@ -88,29 +102,45 @@ start() {
     echo $! > "$REC_PIDFILE"
 
     (
+        local raw_transcript transcript
+        local transcribe_err_file postprocess_err_file
+        local transcribe_err_msg postprocess_err_msg
+
         # Wait for recording to finish
         while is_running_pidfile "$REC_PIDFILE"; do
             sleep 0.1
         done
 
-        raw_transcript="$(llm groq-whisper - < "$REC_FILE")"
-        if [ -n "$raw_transcript" ]; then
-            if [ "$POSTPROCESS_ENABLED" = "1" ] && [ -n "$POSTPROCESS_PROMPT" ]; then
-                # Post-process the raw transcript with punctuation, typo fixes and style tweaks.
-                if transcript="$(printf '%s' "$raw_transcript" | llm --system "$POSTPROCESS_PROMPT")"; then
-                    :
+        transcribe_err_file="$(mktemp "$STATE_DIR/transcribe.XXXXXX.err")"
+
+        if raw_transcript="$(llm groq-whisper - < "$REC_FILE" 2>"$transcribe_err_file")"; then
+            if [ -n "$raw_transcript" ]; then
+                if [ "$POSTPROCESS_ENABLED" = "1" ] && [ -n "$POSTPROCESS_PROMPT" ]; then
+                    postprocess_err_file="$(mktemp "$STATE_DIR/postprocess.XXXXXX.err")"
+                    # Post-process the raw transcript with punctuation, typo fixes and style tweaks.
+                    if transcript="$(printf '%s' "$raw_transcript" | llm prompt --system "$POSTPROCESS_PROMPT" - 2>"$postprocess_err_file")"; then
+                        :
+                    else
+                        postprocess_err_msg="$(format_error_message "$(cat "$postprocess_err_file")")"
+                        notify "❌ Post-process failed: $postprocess_err_msg" 6000
+                        transcript="$raw_transcript"
+                    fi
+                    rm -f "$postprocess_err_file"
                 else
                     transcript="$raw_transcript"
                 fi
-            else
-                transcript="$raw_transcript"
-            fi
 
-            # Copy to both CLIPBOARD (modern apps) and PRIMARY (Unix terminals)
-            printf '%s' "$transcript" | xclip -selection clipboard -in
-            printf '%s' "$transcript" | xclip -selection primary -in
-            xdotool key --clearmodifiers Shift+Insert
+                # Copy to both CLIPBOARD (modern apps) and PRIMARY (Unix terminals)
+                printf '%s' "$transcript" | xclip -selection clipboard -in
+                printf '%s' "$transcript" | xclip -selection primary -in
+                xdotool key --clearmodifiers Shift+Insert
+            fi
+        else
+            transcribe_err_msg="$(format_error_message "$(cat "$transcribe_err_file")")"
+            notify "❌ Transcription failed: $transcribe_err_msg" 6000
         fi
+
+        rm -f "$transcribe_err_file"
         close_notification
         rm -f "$WORKER_PIDFILE"
     ) &
