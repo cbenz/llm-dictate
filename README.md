@@ -1,6 +1,6 @@
-# Dictate
+# llm-dictate
 
-Dictate is a very opinionated speech-to-text (STT) script.
+llm-dictate is a very opinionated speech-to-text (STT) script.
 
 It is not configurable, it only integrates several tools.
 The philosophy is simple: copy-paste the script and adapt it to your own workflow.
@@ -39,22 +39,22 @@ llm keys set groq
 # Paste key here
 ```
 
-Copy [`dictate.sh`](./dictate.sh) to `~/.local/bin` (or another directory you prefer).
+Copy [`llm-dictate`](./llm-dictate) to `~/.local/bin` (or another directory you prefer).
 
-Configure a keyboard shortcut in your desktop environment to run `./dictate.sh toggle` (and optionally another one for `./dictate.sh cancel`).
-By default, transcripts are raw (no post-processing). To enable post-processing, pass the prompt at runtime with `./dictate.sh --prompt "your prompt" toggle`.
+Configure a keyboard shortcut in your desktop environment to run `./llm-dictate toggle` (and optionally another one for `./llm-dictate cancel`).
+By default, transcripts are raw (no post-processing). To enable post-processing, pass the prompt at runtime with `./llm-dictate --prompt "your prompt" toggle`.
 
 For example, I use i3 and added the following lines to `~/.config/i3/config`:
 
 ```text
-bindsym $mod+backslash exec --no-startup-id ~/.local/bin/dictate.sh toggle
-bindsym $mod+Shift+backslash exec --no-startup-id ~/.local/bin/dictate.sh cancel
+bindsym $mod+backslash exec --no-startup-id ~/.local/bin/llm-dictate toggle
+bindsym $mod+Shift+backslash exec --no-startup-id ~/.local/bin/llm-dictate cancel
 ```
 
 ## Usage
 
 ```text
-Usage: dictate.sh [--prompt "<prompt>"|--postprocess|--no-postprocess] <command>
+Usage: llm-dictate [--prompt "<prompt>"|--postprocess|--no-postprocess] <command>
 
 Commands:
   start   Start recording
@@ -69,6 +69,6 @@ Options:
   --no-postprocess  Disable transcript post-processing (default)
 
 Environment:
-  DICTATE_POSTPROCESS=0|1  Default post-processing mode (default: 0)
-  DICTATE_PROCESS_PROMPT    Prompt used when post-processing is enabled
+  LLM_DICTATE_POSTPROCESS=0|1  Default post-processing mode (default: 0)
+  LLM_DICTATE_PROCESS_PROMPT   Prompt used when post-processing is enabled
 ```

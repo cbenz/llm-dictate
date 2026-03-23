@@ -4,10 +4,10 @@ Minimal voice dictation tool for Linux (speech-to-text, STT).
 
 ## Use case
 
-- the user configures a keyboard shortcut (e.g. `mod+backspace`) in their desktop environment to run `./dictate.sh toggle`
+- the user configures a keyboard shortcut (e.g. `mod+backspace`) in their desktop environment to run `./llm-dictate toggle`
 - when the shortcut is pressed, the notification "🎤 Recording..." appears
 - the user speaks for as long as they want
-- the recording can be canceled by running `./dictate.sh cancel` (e.g. bound to another shortcut or run manually)
+- the recording can be canceled by running `./llm-dictate cancel` (e.g. bound to another shortcut or run manually)
 - when the same shortcut is pressed again: recording stops, the notification "⏳ Transcribing..." appears and stays visible for the whole transcription
 - after processing, the transcribed text is inserted into the active text field (as if the user had typed it)
 - the notification "⏳ Transcribing..." disappears
