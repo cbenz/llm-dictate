@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/llm-dictate"
 REC_FILE="$STATE_DIR/llm-dictate.wav"
@@ -6,84 +6,13 @@ REC_PIDFILE="$STATE_DIR/arecord.pid"
 WORKER_PIDFILE="$STATE_DIR/worker.pid"
 SPINNER_PIDFILE="$STATE_DIR/spinner.pid"
 NOTIFY_IDFILE="$STATE_DIR/notification.id"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$STATE_DIR"
 
-require_deps() {
-    local deps=(arecord llm xclip xdotool dunstify)
-    local missing=()
-    local dep
-
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" >/dev/null 2>&1; then
-            missing+=("$dep")
-        fi
-    done
-
-    if [ "${#missing[@]}" -gt 0 ]; then
-        printf 'Missing dependencies: %s\n' "${missing[*]}" >&2
-        dunstify --app-name="llm-dictate" -t 6000 "❌ Missing dependencies: ${missing[*]}" >/dev/null 2>&1 || true
-        printf 'Install the missing commands and retry.\n' >&2
-        exit 1
-    fi
-}
-
-notify() {
-    local message="$1"
-    local timeout="${2:-0}"
-    local args=(--printid --app-name="llm-dictate" -t "$timeout")
-    local notify_id
-
-    if [ -f "$NOTIFY_IDFILE" ]; then
-        args+=(--replace-id="$(cat "$NOTIFY_IDFILE")")
-    fi
-
-    notify_id="$(dunstify "${args[@]}" "$message")" || return
-    printf '%s' "$notify_id" > "$NOTIFY_IDFILE"
-}
-
-start_spinner() {
-    local label="$1"
-
-    stop_spinner
-
-    (
-        local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-        local i=0
-
-        while true; do
-            notify "$label ${frames[$i]}"
-            i=$(( (i + 1) % ${#frames[@]} ))
-            sleep 0.15
-        done
-    ) &
-
-    echo $! > "$SPINNER_PIDFILE"
-}
-
-stop_spinner() {
-    kill_from_pidfile "$SPINNER_PIDFILE" -TERM
-}
-
-close_notification() {
-    if [ -f "$NOTIFY_IDFILE" ]; then
-        dunstify --close="$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
-        rm -f "$NOTIFY_IDFILE"
-    fi
-}
-
-format_error_message() {
-    local error_text="$1"
-    local single_line
-
-    single_line="$(printf '%s' "$error_text" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
-    if [ -z "$single_line" ]; then
-        printf 'Unknown error'
-        return
-    fi
-
-    printf '%.180s' "$single_line"
-}
+# shellcheck source=./llm-desktop-shared.sh
+source "$SCRIPT_DIR/llm-desktop-shared.sh"
+notify_init "llm-dictate" "$NOTIFY_IDFILE"
 
 is_running_pidfile() {
     local pidfile="$1"
@@ -115,10 +44,22 @@ kill_from_pidfile() {
     rm -f "$pidfile"
 }
 
+stop_spinner_with_pidfile() {
+    stop_spinner
+    rm -f "$SPINNER_PIDFILE"
+}
+
+start_spinner_with_pidfile() {
+    start_spinner "$1"
+    if [ -n "${SPINNER_PID:-}" ]; then
+        printf '%s' "$SPINNER_PID" > "$SPINNER_PIDFILE"
+    fi
+}
+
 start() {
     rm -f "$REC_FILE"
 
-    start_spinner "🎤 Recording"
+    start_spinner_with_pidfile "🎤 Recording"
 
     arecord -f S16_LE -r 16000 -c 1 -t wav "$REC_FILE" &
     echo $! > "$REC_PIDFILE"
@@ -134,27 +75,26 @@ start() {
             sleep 0.1
         done
 
-        start_spinner "⏳ Transcribing"
+        start_spinner_with_pidfile "⏳ Transcribing"
 
         transcribe_err_file="$(mktemp "$STATE_DIR/transcribe.XXXXXX.err")"
 
         if transcript="$(llm groq-whisper - < "$REC_FILE" 2>"$transcribe_err_file")"; then
             if [ -n "$transcript" ]; then
 
-                # Copy to both CLIPBOARD (modern apps) and PRIMARY (Unix terminals)
-                printf '%s' "$transcript" | xclip -selection clipboard -in
-                printf '%s' "$transcript" | xclip -selection primary -in
+                # Copy to both CLIPBOARD (modern apps) and PRIMARY (classic Unix apps)
+                clipboard_write_both "$transcript"
                 xdotool key --clearmodifiers Shift+Insert
             fi
         else
             had_error=1
-            stop_spinner
+            stop_spinner_with_pidfile
             transcribe_err_msg="$(format_error_message "$(cat "$transcribe_err_file")")"
-            notify "❌ Transcription failed: $transcribe_err_msg" 6000
+            notify_message "❌ Transcription failed: $transcribe_err_msg" 6000
         fi
 
         rm -f "$transcribe_err_file"
-        stop_spinner
+        stop_spinner_with_pidfile
         if [ "$had_error" -eq 0 ]; then
             close_notification
         fi
@@ -177,8 +117,8 @@ cancel() {
 
     kill_from_pidfile "$REC_PIDFILE" -INT
     kill_from_pidfile "$WORKER_PIDFILE" -TERM
-    stop_spinner
-    notify "🛑 Recording cancelled" 1000
+    stop_spinner_with_pidfile
+    notify_message "🛑 Recording cancelled" 1000
 }
 
 toggle() {
@@ -210,7 +150,18 @@ Commands:
 EOF
 }
 
-require_deps
+if ! require_commands arecord llm xdotool dunstify; then
+    dunstify --app-name="llm-dictate" -t 6000 "❌ Missing dependencies" >/dev/null 2>&1 || true
+    printf 'Install the missing commands and retry.\n' >&2
+    exit 1
+fi
+
+if ! detect_clipboard_tool; then
+    printf 'Missing dependencies: xclip or xsel\n' >&2
+    dunstify --app-name="llm-dictate" -t 6000 "❌ Missing dependencies: xclip or xsel" >/dev/null 2>&1 || true
+    printf 'Install xclip or xsel and retry.\n' >&2
+    exit 1
+fi
 
 command=""
 

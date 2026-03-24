@@ -1,58 +1,110 @@
 # llm-dictate
 
-llm-dictate is a very opinionated speech-to-text (STT) script.
+[Demo video](https://www.youtube.com/watch?v=bk6RkUvzxaw)
 
-It is not configurable, it only integrates several tools.
-The philosophy is simple: copy-paste the script and adapt it to your own workflow.
-If you want to use `whisper.cpp` or `faster-whisper` instead, you can modify the script.
+Minimal desktop toolkit with two scripts:
 
-There is no server, no daemon.
+- `llm-dictate`: voice dictation (start/stop/cancel + transcription)
+- `llm-text-transform`: transform selected text with an LLM prompt menu
 
-Transcription is done by the OpenAI Whisper model via the remote [Groq API](https://groq.com/) (free tier available).
+No daemon, no server.
 
-See also: <https://github.com/cbenz/llm-text-transform>
+## Included scripts
 
-## How it works
+### 1) `llm-dictate`
 
-First, the user configures a keyboard shortcut (e.g. `mod+backslash`) in their desktop environment to start and stop the recording, and another one (e.g. `mod+shift+backslash`) to cancel it.
+Opinionated speech-to-text (STT) workflow:
 
-When the shortcut is pressed, recording starts and the user speaks for as long as they want.
-The recording can be canceled by running the other shortcut, or the first shortcut can be pressed again to stop the recording and start the transcription.
-After processing, the transcribed text is inserted into the active text field (as if the user had typed it).
+- audio recording with `arecord` (16 kHz mono WAV)
+- transcription with `llm groq-whisper`
+- result pasted into active window via clipboard + `xdotool Shift+Insert`
+- status notifications with `dunstify`
+
+Typical flow:
+
+- run `llm-dictate toggle` to start recording
+- run `llm-dictate toggle` again to stop and transcribe
+- optional `llm-dictate cancel` to abort recording
+
+### 2) `llm-text-transform`
+
+Text transformation from primary selection:
+
+- reads text from the PRIMARY clipboard
+- lists prompt files from `~/.agents/prompts/desktop` via `fzf-menu`
+- sends selected prompt + text to `llm`
+- writes result to CLIPBOARD
+
+Useful for translating, rewriting, summarizing, fixing grammar, etc.
+
+## Shared bash module
+
+`src/llm-desktop-shared.sh` provides shared functions used by both scripts:
+
+- dependency checks
+- dunst notification replacement/closing
+- spinner animation
+- clipboard abstraction (`xclip` or `xsel`)
+- integrated `fzf_menu` helper (xterm + fzf)
+- short error formatting helpers
+
+Keep this file next to the executable scripts.
 
 ## Installation
 
-Install the following dependencies:
+### Dependencies
 
-- arecord (alsa-utils)
-- llm: <https://github.com/simonw/llm>
-- llm-groq-whisper: <https://github.com/simonw/llm-groq-whisper>
-- xclip: <https://github.com/astrand/xclip>
-- xdotool: <https://github.com/jordansissel/xdotool>
-- dunst (dunstify): <https://github.com/dunst-project/dunst>
+Common:
 
-Create an account on [Groq](https://groq.com/) and get an API key.
+- `llm`
+- `dunstify` (from dunst)
+- `xclip` or `xsel`
 
-[Install `llm`](https://llm.datasette.io/en/stable/setup.html) and its [`llm-groq-whisper` plugin](https://github.com/simonw/llm-groq-whisper), then configure its API key:
+For dictation (`llm-dictate`):
+
+- `arecord` (alsa-utils)
+- `xdotool`
+- `llm-groq-whisper` plugin
+
+For text transform (`llm-text-transform`):
+
+- `xterm`
+- `fzf`
+
+### Configure `llm` for Groq Whisper
 
 ```bash
 llm install llm-groq-whisper
 llm keys set groq
-# Paste key here
+# Paste your Groq API key
 ```
 
-Copy [`llm-dictate`](./llm-dictate) to `~/.local/bin` (or another directory you prefer).
+### Install scripts (important with shared file)
 
-Configure a keyboard shortcut in your desktop environment to run `./llm-dictate toggle` (and optionally another one for `./llm-dictate cancel`).
+Install all three files from `src/` together in the same directory, for example `~/.local/bin`:
 
-For example, I use i3 and added the following lines to `~/.config/i3/config`:
+```bash
+install -m 755 src/llm-dictate ~/.local/bin/llm-dictate
+install -m 755 src/llm-text-transform ~/.local/bin/llm-text-transform
+install -m 644 src/llm-desktop-shared.sh ~/.local/bin/llm-desktop-shared.sh
+```
+
+Why: both executables rely on `llm-desktop-shared.sh` from their own directory.
+
+### Optional: keyboard shortcuts
+
+Example with i3:
 
 ```text
 bindsym $mod+backslash exec --no-startup-id ~/.local/bin/llm-dictate toggle
 bindsym $mod+Shift+backslash exec --no-startup-id ~/.local/bin/llm-dictate cancel
 ```
 
+You can also bind `~/.local/bin/llm-text-transform` to a shortcut.
+
 ## Usage
+
+`llm-dictate`:
 
 ```text
 Usage: llm-dictate <command>
@@ -64,3 +116,10 @@ Commands:
   toggle  Start if idle, stop if recording
   status  Show status (idle or working)
 ```
+
+`llm-text-transform`:
+
+- select text in an app (PRIMARY selection)
+- run `llm-text-transform`
+- choose a prompt in the menu
+- paste the result from CLIPBOARD where needed
