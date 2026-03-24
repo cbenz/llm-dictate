@@ -105,15 +105,23 @@ fzf_menu() {
         return 1
     fi
 
-    local parent_pid="$$"
-    local parent_stdin="/proc/$parent_pid/fd/0"
-    local parent_stdout="/proc/$parent_pid/fd/1"
     local fzf_menu_font="${LLM_FZF_MENU_FONT:-monospace:size=10}"
+    local input_file output_file
+    input_file="$(mktemp)"
+    output_file="$(mktemp)"
+    # shellcheck disable=SC2064
+    trap "rm -f '$input_file' '$output_file'" RETURN
+
+    cat > "$input_file"
 
     xterm \
         -fa "$fzf_menu_font" \
         -title "fzf-menu" \
-        -e bash -c 'fzf "${@:3}" < "$1" > "$2"' bash "$parent_stdin" "$parent_stdout" "$@"
+        -e bash -c 'fzf "${@:3}" < "$1" > "$2"' bash "$input_file" "$output_file" "$@"
+
+    local exit_code=$?
+    cat "$output_file"
+    return $exit_code
 }
 
 clipboard_read_primary() {
