@@ -3,9 +3,9 @@
 set -euo pipefail
 
 PROMPT_DIR="${LLM_FZF_PROMPT_DIR:-$HOME/.agents/prompts/desktop}"
-LOCK_FILE="/tmp/llm-text-transform.lock"
-STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/llm-dictate"
-NOTIFY_IDFILE="$STATE_DIR/llm-text-transform.notification.id"
+STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/llm-text-transform"
+LOCK_FILE="$STATE_DIR/llm-text-transform.lock"
+NOTIFY_IDFILE="$STATE_DIR/notification.id"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$STATE_DIR"
@@ -26,6 +26,7 @@ if ! detect_clipboard_tool; then
 fi
 
 exec 9>"$LOCK_FILE"
+trap 'rm -f "$LOCK_FILE"' EXIT
 if ! flock -n 9; then
   exit 0
 fi
@@ -70,9 +71,13 @@ $INPUT_TEXT
     stop_spinner
     clipboard_write_clipboard "$RESULT"
     notify_message "✅ Copied result to clipboard" 1500 || true
+    sleep 1.5
+    close_notification
   else
     stop_spinner
     notify_message "❌ LLM processing failed" 5000 || true
+    sleep 5
+    close_notification
   fi
 ) </dev/null >/dev/null 2>/dev/null &
 disown

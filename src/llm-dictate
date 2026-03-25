@@ -73,6 +73,13 @@ start() {
         local transcribe_err_msg
         local had_error=0
 
+        cleanup_worker() {
+            [ -n "${transcribe_err_file:-}" ] && rm -f "$transcribe_err_file"
+            rm -f "$REC_FILE"
+            stop_spinner_with_pidfile
+        }
+        trap cleanup_worker EXIT
+
         # Wait for recording to finish
         while is_running_pidfile "$REC_PIDFILE"; do
             sleep 0.1
@@ -122,6 +129,7 @@ cancel() {
     kill_from_pidfile "$REC_PIDFILE" -INT
     stop_spinner_with_pidfile
     notify_message "🛑 Recording cancelled" 1000
+    (sleep 1; close_notification) & disown
 }
 
 toggle() {
