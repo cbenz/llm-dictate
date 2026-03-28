@@ -108,15 +108,17 @@ class PromptSelectorBackend(QObject):
     filteredPromptNamesChanged = Signal()
     previewTextChanged = Signal()
     selectedPromptChanged = Signal()
+    primaryClipboardTextChanged = Signal()
     finished = Signal()
 
-    def __init__(self, prompt_dir: pathlib.Path) -> None:
+    def __init__(self, prompt_dir: pathlib.Path, primary_clipboard_text: str) -> None:
         super().__init__()
         self.prompt_dir = prompt_dir
         self.all_prompt_names = list_prompt_names(prompt_dir)
         self.filtered_prompt_names = list(self.all_prompt_names)
         self.preview_text_value = "Select a prompt to preview."
         self.selected_prompt_value = ""
+        self.primary_clipboard_text_value = primary_clipboard_text
 
     @Property(list, notify=filteredPromptNamesChanged)
     def filteredPromptNames(self) -> list[str]:
@@ -129,6 +131,10 @@ class PromptSelectorBackend(QObject):
     @Property(str, notify=selectedPromptChanged)
     def selectedPrompt(self) -> str:
         return self.selected_prompt_value
+
+    @Property(str, notify=primaryClipboardTextChanged)
+    def primaryClipboardText(self) -> str:
+        return self.primary_clipboard_text_value
 
     @Slot(str)
     def updateFilter(self, search_text: str) -> None:
@@ -170,7 +176,7 @@ class PromptSelectorBackend(QObject):
         self.finished.emit()
 
 
-def run_qml_selector(prompt_dir: pathlib.Path) -> str:
+def run_qml_selector(prompt_dir: pathlib.Path, primary_clipboard_text: str) -> str:
     qml_file = pathlib.Path(__file__).with_name("llm-text-transform.qml")
     if not qml_file.exists():
         raise FileNotFoundError(f"Missing QML file: {qml_file}")
@@ -180,7 +186,7 @@ def run_qml_selector(prompt_dir: pathlib.Path) -> str:
     if application is None:
         application = QGuiApplication(sys.argv)
 
-    backend = PromptSelectorBackend(prompt_dir)
+    backend = PromptSelectorBackend(prompt_dir, primary_clipboard_text)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("promptBackend", backend)
     engine.load(str(qml_file))
@@ -297,7 +303,7 @@ def run_main() -> int:
             print("Error: primary clipboard is empty.", file=sys.stderr)
             return 1
 
-        prompt_name = run_qml_selector(prompt_dir)
+        prompt_name = run_qml_selector(prompt_dir, input_text)
         if not prompt_name:
             return 0
 

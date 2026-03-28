@@ -86,17 +86,22 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        SplitView {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 12
+            orientation: Qt.Horizontal
+
+            handle: Rectangle {
+                implicitWidth: 6
+                color: palette.mid
+            }
 
             Item {
-                Layout.fillHeight: true
-                Layout.preferredWidth: parent.width * 0.38
+                SplitView.minimumWidth: 280
+                SplitView.preferredWidth: root.width * 0.38
 
                 ColumnLayout {
                     anchors.fill: parent
+                    anchors.margins: 12
                     spacing: 8
 
                     TextField {
@@ -181,28 +186,79 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                Layout.fillHeight: true
-                Layout.preferredWidth: 1
-                color: palette.mid
-            }
+            SplitView {
+                SplitView.minimumWidth: 360
+                SplitView.fillWidth: true
+                orientation: Qt.Vertical
 
-            Item {
-                Layout.fillHeight: true
-                Layout.fillWidth: true
+                handle: Rectangle {
+                    implicitHeight: 6
+                    color: palette.mid
+                }
 
-                ScrollView {
-                    anchors.fill: parent
-                    clip: true
+                Item {
+                    SplitView.minimumHeight: 180
+                    SplitView.preferredHeight: root.height * 0.55
 
-                    TextArea {
-                        id: previewArea
-                        readOnly: true
-                        activeFocusOnPress: false
-                        wrapMode: TextArea.Wrap
-                        text: promptBackend ? promptBackend.previewText : ""
-                        font.family: "monospace"
-                        background: null
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Selected prompt"
+                            font.bold: true
+                        }
+
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            TextArea {
+                                id: previewArea
+                                readOnly: true
+                                activeFocusOnPress: false
+                                wrapMode: TextArea.Wrap
+                                text: promptBackend ? promptBackend.previewText : ""
+                                font.family: "monospace"
+                                background: null
+                            }
+                        }
+                    }
+                }
+
+                Item {
+                    SplitView.minimumHeight: 160
+                    SplitView.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 8
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: "Selected text to transform"
+                            font.bold: true
+                        }
+
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            TextArea {
+                                id: primaryClipboardArea
+                                readOnly: true
+                                activeFocusOnPress: false
+                                wrapMode: TextArea.Wrap
+                                text: promptBackend ? promptBackend.primaryClipboardText : ""
+                                font.family: "monospace"
+                                background: null
+                            }
+                        }
                     }
                 }
             }
