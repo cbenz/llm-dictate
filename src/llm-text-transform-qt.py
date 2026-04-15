@@ -55,32 +55,24 @@ def get_state_dir() -> pathlib.Path:
 
 
 def detect_clipboard_tool() -> str | None:
-    for tool_name in ("xclip", "xsel"):
-        if shutil.which(tool_name):
-            return tool_name
+    if shutil.which("wl-copy") and shutil.which("wl-paste"):
+        return "wl-clipboard"
     return None
 
 
 def read_primary_clipboard(clipboard_tool: str) -> str:
-    if clipboard_tool == "xclip":
-        command = ["xclip", "-o", "-selection", "primary"]
-    else:
-        command = ["xsel", "--output", "--primary"]
+    _ = clipboard_tool
+    command = ["wl-paste", "--primary", "--no-newline"]
     result = subprocess.run(command, capture_output=True, text=True)
     return result.stdout if result.returncode == 0 else ""
 
 
 def write_both_clipboards(clipboard_tool: str, value: str) -> None:
-    if clipboard_tool == "xclip":
-        commands = [
-            ["xclip", "-in", "-selection", "clipboard"],
-            ["xclip", "-in", "-selection", "primary"],
-        ]
-    else:
-        commands = [
-            ["xsel", "--input", "--clipboard"],
-            ["xsel", "--input", "--primary"],
-        ]
+    _ = clipboard_tool
+    commands = [
+        ["wl-copy"],
+        ["wl-copy", "--primary"],
+    ]
     for command in commands:
         subprocess.run(command, input=value, text=True)
 
@@ -90,11 +82,12 @@ def paste_via_shift_insert(clipboard_tool: str, value: str) -> None:
     hold_delay_seconds = float(
         os.environ.get("LLM_SHIFT_INSERT_HOLD_DELAY_SEC", "0.04")
     )
-    subprocess.run(["xdotool", "keydown", "Shift"])
+    # ydotool uses Linux input keycodes: 42=LeftShift, 110=Insert.
+    subprocess.run(["ydotool", "key", "42:1"])
     time.sleep(hold_delay_seconds)
-    subprocess.run(["xdotool", "key", "Insert"])
+    subprocess.run(["ydotool", "key", "110:1", "110:0"])
     time.sleep(hold_delay_seconds)
-    subprocess.run(["xdotool", "keyup", "Shift"])
+    subprocess.run(["ydotool", "key", "42:0"])
 
 
 def list_prompt_names(prompt_dir: pathlib.Path) -> list[str]:
@@ -255,7 +248,7 @@ def run_main() -> int:
     state_dir = get_state_dir()
     notifier = Notifier(state_dir / "notification.id")
 
-    required_commands = ["llm", "dunstify", "xdotool"]
+    required_commands = ["llm", "dunstify", "ydotool"]
     missing_commands = [
         command for command in required_commands if not shutil.which(command)
     ]
@@ -268,8 +261,11 @@ def run_main() -> int:
 
     clipboard_tool = detect_clipboard_tool()
     if clipboard_tool is None:
-        notifier.notify("❌ Missing dependencies: xclip or xsel", 5000)
-        print("Error: no clipboard tool found. Install xclip or xsel.", file=sys.stderr)
+        notifier.notify("❌ Missing dependencies: wl-copy and wl-paste", 5000)
+        print(
+            "Error: no clipboard tool found. Install wl-clipboard.",
+            file=sys.stderr,
+        )
         return 1
 
     lock_file = open(state_dir / f"{APP_NAME}.lock", "w")

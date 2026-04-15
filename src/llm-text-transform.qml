@@ -90,11 +90,6 @@ ApplicationWindow {
             anchors.fill: parent
             orientation: Qt.Horizontal
 
-            handle: Rectangle {
-                implicitWidth: 6
-                color: palette.mid
-            }
-
             Item {
                 SplitView.minimumWidth: 280
                 SplitView.preferredWidth: root.width * 0.38
@@ -190,11 +185,6 @@ ApplicationWindow {
                 SplitView.minimumWidth: 360
                 SplitView.fillWidth: true
                 orientation: Qt.Vertical
-
-                handle: Rectangle {
-                    implicitHeight: 6
-                    color: palette.mid
-                }
 
                 Item {
                     SplitView.minimumHeight: 180

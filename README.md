@@ -17,8 +17,8 @@ Opinionated speech-to-text (STT) workflow:
 
 - audio recording with `arecord` (16 kHz mono WAV)
 - transcription with `llm groq-whisper`
-- result pasted into active window via clipboard + `xdotool Shift+Insert`
-- status notifications with `dunstify`
+- result pasted into active window via clipboard + `ydotool Shift+Insert`
+- status notifications with `notify-send` + `makoctl`
 
 Typical flow:
 
@@ -42,9 +42,9 @@ Useful for translating, rewriting, summarizing, fixing grammar, etc.
 `src/llm-desktop-shared.sh` provides shared functions used by both scripts:
 
 - dependency checks
-- dunst notification replacement/closing
+- mako notification replacement/closing
 - spinner animation
-- clipboard abstraction (`xclip` or `xsel`)
+- clipboard abstraction (`wl-copy` and `wl-paste`)
 - integrated `fzf_menu` helper (xterm + fzf)
 - short error formatting helpers
 
@@ -57,13 +57,14 @@ Keep this file next to the executable scripts.
 Common:
 
 - `llm`
-- `dunstify` (from dunst)
-- `xclip` or `xsel`
+- `notify-send` (from libnotify)
+- `makoctl` (from mako)
+- `wl-copy` and `wl-paste` (from wl-clipboard)
 
 For dictation (`llm-dictate`):
 
 - `arecord` (alsa-utils)
-- `xdotool`
+- `ydotool`
 - `llm-groq-whisper` plugin
 
 For text transform (`llm-text-transform`):

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
+# Push-to-talk variant: bind `start` to key press and `stop` to key release.
+#
+# Example sway/i3 bindings:
+#   bindsym XF86Launch5 exec llm-dictate-ptt start
+#   bindsym --release XF86Launch5 exec llm-dictate-ptt stop
 
 STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/llm-dictate"
-REC_FILE="$STATE_DIR/llm-dictate.wav"
-REC_PIDFILE="$STATE_DIR/arecord.pid"
+REC_FILE="$STATE_DIR/llm-dictate.mp3"
+REC_PIDFILE="$STATE_DIR/ffmpeg.pid"
 WORKER_PIDFILE="$STATE_DIR/worker.pid"
 SPINNER_PIDFILE="$STATE_DIR/spinner.pid"
 NOTIFY_IDFILE="$STATE_DIR/notification.id"
@@ -60,13 +65,49 @@ start_spinner_with_pidfile() {
 }
 
 start() {
+    # Ignore repeated key press events while already recording.
+    if recording_active; then
+        return 0
+    fi
+
+    # Ignore start requests while a previous transcription is still running.
+    if is_running_pidfile "$WORKER_PIDFILE"; then
+        return 0
+    fi
+
     rm -f "$REC_FILE"
 
     start_spinner_with_pidfile "🎤 Recording"
 
-    arecord -f S16_LE -r 16000 -c 1 -t wav "$REC_FILE" &
+    # Save up to 10 mins. Minimize buffering (-flush_packets/-avioflags) so
+    # the file is valid and complete as soon as ffmpeg is killed.
+    ffmpeg -f pulse -i default -ar 16000 -ac 1 -t 600 -y \
+        -c:a libmp3lame -q:a 2 \
+        -flush_packets 1 -avioflags direct \
+        -loglevel quiet "$REC_FILE" &
     echo $! > "$REC_PIDFILE"
+}
 
+stop() {
+    # Ignore repeated release events while transcription is already running.
+    if is_running_pidfile "$WORKER_PIDFILE"; then
+        return 0
+    fi
+
+    if ! recording_active; then
+        return 0
+    fi
+
+    # Send SIGTERM so ffmpeg finalizes the MP3 file, then wait for it to exit.
+    local ffmpeg_pid
+    ffmpeg_pid="$(cat "$REC_PIDFILE")"
+    kill -TERM "$ffmpeg_pid" 2>/dev/null
+    rm -f "$REC_PIDFILE"
+    while kill -0 "$ffmpeg_pid" 2>/dev/null; do
+        sleep 0.05
+    done
+
+    # Launch transcription in background
     (
         local transcript
         local transcribe_err_file
@@ -80,17 +121,11 @@ start() {
         }
         trap cleanup_worker EXIT
 
-        # Wait for recording to finish
-        while is_running_pidfile "$REC_PIDFILE"; do
-            sleep 0.1
-        done
-
         start_spinner_with_pidfile "⏳ Transcribing"
 
         transcribe_err_file="$(mktemp "$STATE_DIR/transcribe.XXXXXX.err")"
 
         if transcript="$(llm groq-whisper - < "$REC_FILE" 2>"$transcribe_err_file")"; then
-        # if transcript="$(llm groq-whisper --prompt "$(cat /home/cbenz/.agents/prompts/desktop/resolve-terms.prompt.md)" - < "$REC_FILE" 2>"$transcribe_err_file")"; then
             if [ -n "$transcript" ]; then
                 clipboard_paste_via_shift_insert "$transcript"
             fi
@@ -111,31 +146,18 @@ start() {
     echo $! > "$WORKER_PIDFILE"
 }
 
-stop() {
-    if recording_active; then
-        kill_from_pidfile "$REC_PIDFILE" -INT
-    fi
-}
-
 cancel() {
-    if ! recording_active; then
-        echo "No recording in progress"
+    if ! recording_active && ! is_running_pidfile "$WORKER_PIDFILE"; then
+        echo "No recording or transcription in progress"
         return 0
     fi
 
+    kill_from_pidfile "$REC_PIDFILE" -TERM
     kill_from_pidfile "$WORKER_PIDFILE" -TERM
-    kill_from_pidfile "$REC_PIDFILE" -INT
     stop_spinner_with_pidfile
-    notify_message "🛑 Recording cancelled" 1000
+    rm -f "$REC_FILE"
+    notify_message "🛑 Cancelled" 1000
     (sleep 1; close_notification) & disown
-}
-
-toggle() {
-    if recording_active; then
-        stop
-    else
-        start
-    fi
 }
 
 status() {
@@ -148,18 +170,21 @@ status() {
 
 usage() {
     cat <<'EOF'
-Usage: llm-dictate <command>
+Usage: llm-dictate-ptt <command>
 
 Commands:
-  start   Start recording
-  stop    Stop recording and transcribe
-  cancel  Cancel recording
-  toggle  Start if idle, stop if recording
+  start   Start recording (bind to key press)
+  stop    Stop recording and transcribe (bind to key release)
+  cancel  Cancel recording or transcription in progress
   status  Show status (idle or working)
+
+Example sway/i3 bindings:
+  bindsym XF86Launch5 exec llm-dictate-ptt start
+  bindsym --release XF86Launch5 exec llm-dictate-ptt stop
 EOF
 }
 
-if ! require_commands arecord llm ydotool notify-send makoctl; then
+if ! require_commands ffmpeg llm ydotool notify-send makoctl; then
     notify-send -a "llm-dictate" -t 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
     printf 'Install the missing commands and retry.\n' >&2
     exit 1
@@ -176,7 +201,7 @@ command=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        start|stop|cancel|toggle|status)
+        start|stop|cancel|status)
             if [ -n "$command" ]; then
                 echo "Only one command can be provided" >&2
                 exit 1
@@ -204,9 +229,6 @@ case "$command" in
         ;;
     cancel)
         cancel
-        ;;
-    toggle)
-        toggle
         ;;
     status)
         status

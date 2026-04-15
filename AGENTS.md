@@ -26,7 +26,7 @@ Minimal voice dictation tool for Linux (speech-to-text, STT).
 
 - audio recording via `arecord` (S16_LE, 16 kHz, mono, WAV)
 - transcription via `llm groq-whisper`
-- keyboard result injection: copy text to **CLIPBOARD and PRIMARY** (`xclip -selection clipboard` and `xclip -selection primary`) followed by `xdotool key Shift-Insert`
+- keyboard result injection: copy text to **CLIPBOARD and PRIMARY** (`xclip -selection clipboard` and `xclip -selection primary`) followed by `ydotool key Shift-Insert`
   - CLIPBOARD for modern applications (VS Code, browsers)
   - PRIMARY for classic Unix applications (terminals, xterm, vim)
 - notifications via `dunstify`

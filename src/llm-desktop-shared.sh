@@ -37,20 +37,20 @@ notify_init() {
 notify_message() {
     local message="$1"
     local timeout="${2:-0}"
-    local args=(--printid --app-name="$NOTIFY_APP_NAME" -t "$timeout")
+    local args=(-p -a "$NOTIFY_APP_NAME" -t "$timeout")
     local notify_id
 
     if [ -f "$NOTIFY_IDFILE" ]; then
-        args+=(--replace-id="$(cat "$NOTIFY_IDFILE")")
+        args+=(-r "$(cat "$NOTIFY_IDFILE")")
     fi
 
-    notify_id="$(dunstify "${args[@]}" "$NOTIFY_APP_NAME" "$message")" || return 1
+    notify_id="$(notify-send "${args[@]}" "$NOTIFY_APP_NAME" "$message")" || return 1
     printf '%s' "$notify_id" > "$NOTIFY_IDFILE"
 }
 
 close_notification() {
     if [ -f "$NOTIFY_IDFILE" ]; then
-        dunstify --close="$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
+        makoctl dismiss -n "$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
         rm -f "$NOTIFY_IDFILE"
     fi
 }
@@ -83,12 +83,8 @@ stop_spinner() {
 }
 
 detect_clipboard_tool() {
-    if command -v xclip >/dev/null 2>&1; then
-        CLIPBOARD_TOOL="xclip"
-        return 0
-    fi
-    if command -v xsel >/dev/null 2>&1; then
-        CLIPBOARD_TOOL="xsel"
+    if command -v wl-copy >/dev/null 2>&1 && command -v wl-paste >/dev/null 2>&1; then
+        CLIPBOARD_TOOL="wl-clipboard"
         return 0
     fi
     return 1
@@ -125,26 +121,17 @@ fzf_menu() {
 }
 
 clipboard_read_primary() {
-    case "$CLIPBOARD_TOOL" in
-        xclip) xclip -o -selection primary ;;
-        xsel) xsel --output --primary ;;
-    esac
+    wl-paste --primary --no-newline
 }
 
 clipboard_write_clipboard() {
     local value="$1"
-    case "$CLIPBOARD_TOOL" in
-        xclip) printf '%s' "$value" | xclip -in -selection clipboard ;;
-        xsel) printf '%s' "$value" | xsel --input --clipboard ;;
-    esac
+    printf '%s' "$value" | wl-copy
 }
 
 clipboard_write_primary() {
     local value="$1"
-    case "$CLIPBOARD_TOOL" in
-        xclip) printf '%s' "$value" | xclip -in -selection primary ;;
-        xsel) printf '%s' "$value" | xsel --input --primary ;;
-    esac
+    printf '%s' "$value" | wl-copy --primary
 }
 
 clipboard_write_both() {
@@ -160,12 +147,12 @@ clipboard_paste_via_shift_insert() {
 
     clipboard_write_both "$value"
 
-    # Hold Shift briefly before and after Insert to avoid occasional plain Insert.
-    xdotool keydown Shift || return 1
+    # ydotool uses Linux input keycodes: 42=LeftShift, 110=Insert.
+    ydotool key 42:1 || return 1
     sleep "$hold_delay"
-    xdotool key Insert || key_status=$?
+    ydotool key 110:1 110:0 || key_status=$?
     sleep "$hold_delay"
-    xdotool keyup Shift || true
+    ydotool key 42:0 || true
 
     return "$key_status"
 }
