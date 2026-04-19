@@ -37,20 +37,21 @@ notify_init() {
 notify_message() {
     local message="$1"
     local timeout="${2:-0}"
-    local args=(-p -a "$NOTIFY_APP_NAME" -t "$timeout")
+    local urgency="${3:-normal}"
+    local args=(--printid --appname "$NOTIFY_APP_NAME" --urgency "$urgency" --timeout "$timeout")
     local notify_id
 
     if [ -f "$NOTIFY_IDFILE" ]; then
-        args+=(-r "$(cat "$NOTIFY_IDFILE")")
+        args+=(--replace "$(cat "$NOTIFY_IDFILE")")
     fi
 
-    notify_id="$(notify-send "${args[@]}" "$NOTIFY_APP_NAME" "$message")" || return 1
+    notify_id="$(dunstify "${args[@]}" "$NOTIFY_APP_NAME" "$message")" || return 1
     printf '%s' "$notify_id" > "$NOTIFY_IDFILE"
 }
 
 close_notification() {
     if [ -f "$NOTIFY_IDFILE" ]; then
-        makoctl dismiss -n "$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
+        dunstify --close="$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
         rm -f "$NOTIFY_IDFILE"
     fi
 }

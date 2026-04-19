@@ -59,7 +59,51 @@ start_spinner_with_pidfile() {
     fi
 }
 
+microphone_is_muted() {
+    local output
+    local control
+
+    if command -v wpctl >/dev/null 2>&1; then
+        output="$(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null || true)"
+        if [ -n "$output" ]; then
+            printf '%s' "$output" | grep -q '\[MUTED\]' && return 0
+            return 1
+        fi
+    fi
+
+    if command -v pactl >/dev/null 2>&1; then
+        output="$(pactl get-source-mute @DEFAULT_SOURCE@ 2>/dev/null || true)"
+        case "$output" in
+            *"Mute: yes"*) return 0 ;;
+            *"Mute: no"*) return 1 ;;
+        esac
+    fi
+
+    if command -v amixer >/dev/null 2>&1; then
+        for control in Capture Mic; do
+            output="$(amixer -D default sget "$control" 2>/dev/null || true)"
+            if [ -n "$output" ]; then
+                printf '%s' "$output" | grep -q '\[on\]' && return 1
+                printf '%s' "$output" | grep -q '\[off\]' && return 0
+            fi
+        done
+    fi
+
+    return 1
+}
+
+ensure_micro_not_muted() {
+    if microphone_is_muted; then
+        notify_message "🎙️ Microphone is muted. Unmute it before dictating." 4500 critical || true
+        return 1
+    fi
+
+    return 0
+}
+
 start() {
+    ensure_micro_not_muted || return 1
+
     rm -f "$REC_FILE"
 
     start_spinner_with_pidfile "🎤 Recording"
@@ -159,15 +203,15 @@ Commands:
 EOF
 }
 
-if ! require_commands arecord llm ydotool notify-send makoctl; then
-    notify-send -a "llm-dictate" -t 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
+if ! require_commands arecord llm ydotool dunstify; then
+    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
     printf 'Install the missing commands and retry.\n' >&2
     exit 1
 fi
 
 if ! detect_clipboard_tool; then
     printf 'Missing dependencies: wl-copy and wl-paste\n' >&2
-    notify-send -a "llm-dictate" -t 6000 "llm-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
+    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
     printf 'Install wl-clipboard and retry.\n' >&2
     exit 1
 fi

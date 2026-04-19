@@ -18,7 +18,7 @@ Opinionated speech-to-text (STT) workflow:
 - audio recording with `arecord` (16 kHz mono WAV)
 - transcription with `llm groq-whisper`
 - result pasted into active window via clipboard + `ydotool Shift+Insert`
-- status notifications with `notify-send` + `makoctl`
+- status notifications with `dunstify`
 
 Typical flow:
 
@@ -57,8 +57,7 @@ Keep this file next to the executable scripts.
 Common:
 
 - `llm`
-- `notify-send` (from libnotify)
-- `makoctl` (from mako)
+- `dunstify` (from dunst)
 - `wl-copy` and `wl-paste` (from wl-clipboard)
 
 For dictation (`llm-dictate`):

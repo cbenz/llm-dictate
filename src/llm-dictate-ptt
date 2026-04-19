@@ -184,15 +184,15 @@ Example sway/i3 bindings:
 EOF
 }
 
-if ! require_commands ffmpeg llm ydotool notify-send makoctl; then
-    notify-send -a "llm-dictate" -t 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
+if ! require_commands ffmpeg llm ydotool dunstify; then
+    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
     printf 'Install the missing commands and retry.\n' >&2
     exit 1
 fi
 
 if ! detect_clipboard_tool; then
     printf 'Missing dependencies: wl-copy and wl-paste\n' >&2
-    notify-send -a "llm-dictate" -t 6000 "llm-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
+    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
     printf 'Install wl-clipboard and retry.\n' >&2
     exit 1
 fi
