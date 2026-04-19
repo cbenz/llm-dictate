@@ -1,75 +1,26 @@
-# llm-dictate
+# tiny-dictate
 
-[Demo video](https://www.youtube.com/watch?v=bk6RkUvzxaw)
+Minimal desktop voice dictation tool: no daemon, no GUI, just keyboard shortcuts and notifications.
 
-Minimal desktop toolkit with two scripts:
+Opinionated workflow: press a keyboard shortcut to start recording, press it again to stop and transcribe (or cancel with another keyboard shortcut).
 
-- `llm-dictate`: voice dictation (start/stop/cancel + transcription)
-- `llm-text-transform`: transform selected text with an LLM prompt menu
+Based on the following tools:
 
-No daemon, no server.
-
-## Included scripts
-
-### 1) `llm-dictate`
-
-Opinionated speech-to-text (STT) workflow:
-
-- audio recording with `arecord` (16 kHz mono WAV)
+- audio recording with `arecord`
 - transcription with `llm groq-whisper`
 - result pasted into active window via clipboard + `ydotool Shift+Insert`
 - status notifications with `dunstify`
-
-Typical flow:
-
-- run `llm-dictate toggle` to start recording
-- run `llm-dictate toggle` again to stop and transcribe
-- optional `llm-dictate cancel` to abort recording
-
-### 2) `llm-text-transform`
-
-Text transformation from primary selection:
-
-- reads text from the PRIMARY clipboard
-- lists prompt files from `~/.agents/prompts/desktop` via `fzf-menu`
-- sends selected prompt + text to `llm`
-- writes result to CLIPBOARD
-
-Useful for translating, rewriting, summarizing, fixing grammar, etc.
-
-## Shared bash module
-
-`src/llm-desktop-shared.sh` provides shared functions used by both scripts:
-
-- dependency checks
-- mako notification replacement/closing
-- spinner animation
-- clipboard abstraction (`wl-copy` and `wl-paste`)
-- integrated `fzf_menu` helper (xterm + fzf)
-- short error formatting helpers
-
-Keep this file next to the executable scripts.
 
 ## Installation
 
 ### Dependencies
 
-Common:
-
-- `llm`
-- `dunstify` (from dunst)
-- `wl-copy` and `wl-paste` (from wl-clipboard)
-
-For dictation (`llm-dictate`):
-
 - `arecord` (alsa-utils)
-- `ydotool`
-- `llm-groq-whisper` plugin
-
-For text transform (`llm-text-transform`):
-
-- `xterm`
-- `fzf`
+- [dunst](https://dunst-project.org/)
+- [llm](https://github.com/simonw/llm)
+- [llm-groq-whisper](https://github.com/simonw/llm-groq-whisper) llm plugin
+- [wl-clipboard](https://github.com/bugaevc/wl-clipboard)
+- [ydotool](https://github.com/ReimuNotMoe/ydotool)
 
 ### Configure `llm` for Groq Whisper
 
@@ -79,35 +30,27 @@ llm keys set groq
 # Paste your Groq API key
 ```
 
-### Install scripts (important with shared file)
+### Install script
 
-Install all three files from `src/` together in the same directory, for example `~/.local/bin`:
+Install the script in your PATH, for example `~/.local/bin`:
 
 ```bash
-install -m 755 src/llm-dictate ~/.local/bin/llm-dictate
-install -m 755 src/llm-text-transform ~/.local/bin/llm-text-transform
-install -m 644 src/llm-desktop-shared.sh ~/.local/bin/llm-desktop-shared.sh
+install -m 755 tiny-dictate ~/.local/bin/tiny-dictate
 ```
 
-Why: both executables rely on `llm-desktop-shared.sh` from their own directory.
+### Configure keyboard shortcuts
 
-### Optional: keyboard shortcuts
-
-Example with i3:
+Example with i3/sway:
 
 ```text
-bindsym $mod+backslash exec --no-startup-id ~/.local/bin/llm-dictate toggle
-bindsym $mod+Shift+backslash exec --no-startup-id ~/.local/bin/llm-dictate cancel
+bindsym $mod+backslash exec ~/.local/bin/tiny-dictate toggle
+bindsym $mod+Shift+backslash exec ~/.local/bin/tiny-dictate cancel
 ```
-
-You can also bind `~/.local/bin/llm-text-transform` to a shortcut.
 
 ## Usage
 
-`llm-dictate`:
-
 ```text
-Usage: llm-dictate <command>
+Usage: tiny-dictate <command>
 
 Commands:
   start   Start recording
@@ -116,10 +59,3 @@ Commands:
   toggle  Start if idle, stop if recording
   status  Show status (idle or working)
 ```
-
-`llm-text-transform`:
-
-- select text in an app (PRIMARY selection)
-- run `llm-text-transform`
-- choose a prompt in the menu
-- paste the result from CLIPBOARD where needed

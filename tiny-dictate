@@ -1,18 +1,139 @@
 #!/usr/bin/env bash
 
-STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/llm-dictate"
-REC_FILE="$STATE_DIR/llm-dictate.wav"
+STATE_DIR="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/tiny-dictate"
+REC_FILE="$STATE_DIR/tiny-dictate.wav"
 REC_PIDFILE="$STATE_DIR/arecord.pid"
 WORKER_PIDFILE="$STATE_DIR/worker.pid"
 SPINNER_PIDFILE="$STATE_DIR/spinner.pid"
 NOTIFY_IDFILE="$STATE_DIR/notification.id"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$STATE_DIR"
 
-# shellcheck source=./llm-desktop-shared.sh
-source "$SCRIPT_DIR/llm-desktop-shared.sh"
-notify_init "llm-dictate" "$NOTIFY_IDFILE"
+require_commands() {
+    local missing=()
+    local cmd
+
+    for cmd in "$@"; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    if [ "${#missing[@]}" -gt 0 ]; then
+        printf 'Missing dependencies: %s\n' "${missing[*]}" >&2
+        return 1
+    fi
+}
+
+format_error_message() {
+    local error_text="$1"
+    local single_line
+
+    single_line="$(printf '%s' "$error_text" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')"
+    if [ -z "$single_line" ]; then
+        printf 'Unknown error'
+        return
+    fi
+
+    printf '%.180s' "$single_line"
+}
+
+notify_init() {
+    NOTIFY_APP_NAME="$1"
+    NOTIFY_IDFILE="$2"
+}
+
+notify_message() {
+    local message="$1"
+    local timeout="${2:-0}"
+    local urgency="${3:-normal}"
+    local args=(--printid --appname "$NOTIFY_APP_NAME" --urgency "$urgency" --timeout "$timeout")
+    local notify_id
+
+    if [ -f "$NOTIFY_IDFILE" ]; then
+        args+=(--replace "$(cat "$NOTIFY_IDFILE")")
+    fi
+
+    notify_id="$(dunstify "${args[@]}" "$NOTIFY_APP_NAME" "$message")" || return 1
+    printf '%s' "$notify_id" > "$NOTIFY_IDFILE"
+}
+
+close_notification() {
+    if [ -f "$NOTIFY_IDFILE" ]; then
+        dunstify --close="$(cat "$NOTIFY_IDFILE")" >/dev/null 2>&1 || true
+        rm -f "$NOTIFY_IDFILE"
+    fi
+}
+
+start_spinner() {
+    local label="$1"
+
+    stop_spinner
+
+    (
+        local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+        local i=0
+
+        while true; do
+            notify_message "$label ${frames[$i]}" || true
+            i=$(( (i + 1) % ${#frames[@]} ))
+            sleep 0.15
+        done
+    ) &
+
+    SPINNER_PID=$!
+}
+
+stop_spinner() {
+    if [ -n "${SPINNER_PID:-}" ] && kill -0 "$SPINNER_PID" 2>/dev/null; then
+        kill "$SPINNER_PID" 2>/dev/null || true
+        wait "$SPINNER_PID" 2>/dev/null || true
+    fi
+    SPINNER_PID=""
+}
+
+detect_clipboard_tool() {
+    if command -v wl-copy >/dev/null 2>&1 && command -v wl-paste >/dev/null 2>&1; then
+        CLIPBOARD_TOOL="wl-clipboard"
+        return 0
+    fi
+    return 1
+}
+
+clipboard_write_clipboard() {
+    local value="$1"
+    printf '%s' "$value" | wl-copy
+}
+
+clipboard_write_primary() {
+    local value="$1"
+    printf '%s' "$value" | wl-copy --primary
+}
+
+clipboard_write_both() {
+    local value="$1"
+    clipboard_write_clipboard "$value"
+    clipboard_write_primary "$value"
+}
+
+clipboard_paste_via_shift_insert() {
+    local value="$1"
+    local hold_delay="${LLM_SHIFT_INSERT_HOLD_DELAY_SEC:-0.04}"
+    local key_status=0
+
+    clipboard_write_both "$value"
+
+    # ydotool uses Linux input keycodes: 42=LeftShift, 110=Insert.
+    ydotool key 42:1 || return 1
+    sleep "$hold_delay"
+    ydotool key 110:1 110:0 || key_status=$?
+    sleep "$hold_delay"
+    ydotool key 42:0 || true
+
+    return "$key_status"
+}
+
+notify_init "tiny-dictate" "$NOTIFY_IDFILE"
 
 is_running_pidfile() {
     local pidfile="$1"
@@ -134,7 +255,6 @@ start() {
         transcribe_err_file="$(mktemp "$STATE_DIR/transcribe.XXXXXX.err")"
 
         if transcript="$(llm groq-whisper - < "$REC_FILE" 2>"$transcribe_err_file")"; then
-        # if transcript="$(llm groq-whisper --prompt "$(cat /home/cbenz/.agents/prompts/desktop/resolve-terms.prompt.md)" - < "$REC_FILE" 2>"$transcribe_err_file")"; then
             if [ -n "$transcript" ]; then
                 clipboard_paste_via_shift_insert "$transcript"
             fi
@@ -192,7 +312,7 @@ status() {
 
 usage() {
     cat <<'EOF'
-Usage: llm-dictate <command>
+Usage: tiny-dictate <command>
 
 Commands:
   start   Start recording
@@ -204,14 +324,14 @@ EOF
 }
 
 if ! require_commands arecord llm ydotool dunstify; then
-    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
+    dunstify --appname "tiny-dictate" --timeout 6000 "tiny-dictate" "❌ Missing dependencies" >/dev/null 2>&1 || true
     printf 'Install the missing commands and retry.\n' >&2
     exit 1
 fi
 
 if ! detect_clipboard_tool; then
     printf 'Missing dependencies: wl-copy and wl-paste\n' >&2
-    dunstify --appname "llm-dictate" --timeout 6000 "llm-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
+    dunstify --appname "tiny-dictate" --timeout 6000 "tiny-dictate" "❌ Missing dependencies: wl-copy and wl-paste" >/dev/null 2>&1 || true
     printf 'Install wl-clipboard and retry.\n' >&2
     exit 1
 fi
