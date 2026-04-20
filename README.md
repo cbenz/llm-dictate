@@ -6,7 +6,7 @@ Opinionated workflow: press a keyboard shortcut to start recording, press it aga
 
 Based on the following tools:
 
-- audio recording with `arecord`
+- audio recording with `arecord`, encoded to MP3 on-the-fly with `lame`
 - transcription with `llm groq-whisper`
 - result pasted into active window via clipboard + `ydotool Shift+Insert`
 - status notifications with `dunstify`
@@ -16,6 +16,7 @@ Based on the following tools:
 ### Dependencies
 
 - `arecord` (alsa-utils)
+- `lame`
 - [dunst](https://dunst-project.org/)
 - [llm](https://github.com/simonw/llm)
 - [llm-groq-whisper](https://github.com/simonw/llm-groq-whisper) llm plugin
